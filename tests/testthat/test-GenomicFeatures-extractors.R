@@ -1,11 +1,10 @@
 context("GenomicFeatures-extractors")
 
 suppressPackageStartupMessages({
-    library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+    library(GenomicFeatures)
 })
-txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
-
 hg38light <- hg38light()
+txdb <- loadDb(hg38light)
 src <- src_organism(dbpath=hg38light)
 
 .test_extractor <- function(src, txdb, fun, subset) {
