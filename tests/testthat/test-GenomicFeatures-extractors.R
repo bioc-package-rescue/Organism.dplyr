@@ -1,11 +1,33 @@
 context("GenomicFeatures-extractors")
 
 suppressPackageStartupMessages({
-    library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+    library(GenomicFeatures)
+    library(txdbmaker)
 })
-txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+
+.loadLightTxDb <- function(dbpath) {
+    conn <- RSQLite::dbConnect(RSQLite::SQLite(), dbpath)
+    tx_df <- RSQLite::dbReadTable(conn, "ranges_tx")
+    exon_df <- RSQLite::dbReadTable(conn, "ranges_exon")
+    cds_df <- RSQLite::dbReadTable(conn, "ranges_cds")
+    seq_df <- RSQLite::dbReadTable(conn, "seqinfo")
+    RSQLite::dbDisconnect(conn)
+    transcripts <- unique(tx_df[, c("tx_id", "tx_name", "tx_chrom", "tx_strand", "tx_start", "tx_end")])
+    splicings <- merge(exon_df, cds_df, by=c("tx_id", "exon_rank"), all.x=TRUE)
+    splicings <- splicings[, c("tx_id", "exon_rank", "exon_id", "exon_start", "exon_end", "cds_id", "cds_start", "cds_end")]
+    chrominfo <- seq_df[, c("seqnames", "seqlengths", "isCircular")]
+    colnames(chrominfo) <- c("chrom", "length", "is_circular")
+    chrominfo$is_circular <- as.logical(chrominfo$is_circular)
+    genes <- unique(tx_df[!is.na(tx_df$entrez), c("tx_id", "entrez")])
+    colnames(genes) <- c("tx_id", "gene_id")
+    genes$gene_id <- as.character(genes$gene_id)
+    txdb <- suppressWarnings(makeTxDb(transcripts, splicings, genes=genes, chrominfo=chrominfo))
+    suppressWarnings(GenomeInfoDb::genome(txdb) <- "hg38")
+    txdb
+}
 
 hg38light <- hg38light()
+txdb <- .loadLightTxDb(hg38light)
 src <- src_organism(dbpath=hg38light)
 
 .test_extractor <- function(src, txdb, fun, subset) {
